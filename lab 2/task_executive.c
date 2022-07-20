@@ -1,58 +1,75 @@
 #include <stdio.h>
 #include <stdint.h>
-
 #include "common.h"
-#include "task_executive.h"
+#include <task_executive.h>
+#define MAX_TASKS 10
 
-int32_t counter = 0;
-int32_t previousCounter;
+typedef struct Task_s {
+void (*f)(void *data); /* Task function */
+void *data; /* Private data pointer for this task */
+} Task_t;
 
-void TaskIdle(void *data){
+Task_t tasks[MAX_TASKS];  // intiialize tasks array 
+int32_t currentTask ;
+
+void TaskInit(void){
+  tasks[currentTask].f(tasks[currentTask].data);
 }
 
-void Task1(void *data){
-  previousCounter = counter;
-  counter = counter + 1;
-  printf("Task1 is running, change counter from %ld to %ld\n",previousCounter,counter);
+
+
+int32_t TaskAdd(void (*f)(void *data), void *data) {
+  /* Try to find an empty slot */
+  for(int32_t i=0; i<MAX_TASKS; i++) {
+    if(tasks[i].f == NULL) {
+	    tasks[i].f = f;
+	    tasks[i].data = data;
+	    return i;
+      }
+  }
+  /* No slots available, return -1 */
+  return -1;
 }
 
-void Task2(void *data){
-  previousCounter = counter;
-  counter = counter - 1;
-  printf("Task2 is running, change counter from %ld to %ld\n",previousCounter,counter);
+
+static int32_t TaskNext(void)
+{
+  int32_t i;
+  uint32_t count=0;
+  i = currentTask;
+  do {
+    i = (i + 1) % MAX_TASKS;
+    count++;
+  } while((tasks[i].f == NULL) && (count <= MAX_TASKS));
+  return (count <= MAX_TASKS) ? i : -1;
 }
 
-void Task3(void *data){
-  printf("Task3 is running\n");  
+
+int32_t TaskKill(int32_t id) {
+  tasks[id].f = NULL;
+  tasks[id].data = NULL;
+  return id;
+}
+
+
+
+int32_t TaskSwitcher(void) {
+  currentTask = TaskNext();
+  if(currentTask < 0) {
+    return -1;
+  }
+  if(currentTask > MAX_TASKS)
+  {
+    currentTask = 0;
+  }
+  tasks[currentTask].f(tasks[currentTask].data);
+  return currentTask;
+}
+
+
+
+int32_t TaskCurrent(void) {
   
+  return currentTask;
 }
 
-void Task4(void *data){
-  TaskKill(1);
-  TaskKill(2);
-  TaskKill(4);
-
-  printf("Task4 is running, killed task1, task2, and itself\n");
-}
-
-ParserReturnVal_t CmdTaskTest(int mode){
- 
-  if(mode != CMD_INTERACTIVE) return CmdReturnOk;
-
-  
-  TaskAdd(TaskIdle, NULL);
-  TaskAdd(Task1, NULL);
-  TaskAdd(Task2, NULL);
-  TaskAdd(Task3, NULL);
-  TaskAdd(Task4, NULL);
-  TaskInit();
-
-
-  
- for(int i = 0; i < 6; i++) {
-    TaskSwitcher();
-    }  
- return CmdReturnOk;
-}
-
-ADD_CMD("tasktest",CmdTaskTest,"the Task Executive");
